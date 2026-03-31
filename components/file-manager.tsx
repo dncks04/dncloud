@@ -1,6 +1,6 @@
 "use client";
-
-import { useState, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { useState, useCallback, useEffect } from "react";
 import {
   Folder,
   File,
@@ -49,21 +49,7 @@ interface FileItem {
   parentId: string | null;
 }
 
-const initialFiles: FileItem[] = [
-  { id: "1", name: "문서", type: "folder", modifiedAt: new Date("2024-03-15"), parentId: null },
-  { id: "2", name: "사진", type: "folder", modifiedAt: new Date("2024-03-14"), parentId: null },
-  { id: "3", name: "영상", type: "folder", modifiedAt: new Date("2024-03-13"), parentId: null },
-  { id: "4", name: "프로젝트 계획서.pdf", type: "document", size: 2400000, modifiedAt: new Date("2024-03-12"), parentId: null },
-  { id: "5", name: "회의록.docx", type: "document", size: 156000, modifiedAt: new Date("2024-03-11"), parentId: null },
-  { id: "6", name: "휴가 사진.jpg", type: "image", size: 4500000, modifiedAt: new Date("2024-03-10"), parentId: null },
-  { id: "7", name: "발표 자료.pptx", type: "document", size: 8900000, modifiedAt: new Date("2024-03-09"), parentId: null },
-  { id: "8", name: "음악 파일.mp3", type: "audio", size: 5600000, modifiedAt: new Date("2024-03-08"), parentId: null },
-  { id: "9", name: "백업.zip", type: "archive", size: 125000000, modifiedAt: new Date("2024-03-07"), parentId: null },
-  { id: "10", name: "이력서_최종.pdf", type: "document", size: 890000, modifiedAt: new Date("2024-03-06"), parentId: "1" },
-  { id: "11", name: "계약서.pdf", type: "document", size: 1200000, modifiedAt: new Date("2024-03-05"), parentId: "1" },
-  { id: "12", name: "제주도 여행.jpg", type: "image", size: 3200000, modifiedAt: new Date("2024-03-04"), parentId: "2" },
-  { id: "13", name: "가족 사진.png", type: "image", size: 2800000, modifiedAt: new Date("2024-03-03"), parentId: "2" },
-];
+const initialFiles: FileItem[] = [];
 
 type MenuType = "all" | "trash";
 
@@ -114,6 +100,25 @@ function getFileType(filename: string): FileType {
 
 export function FileManager() {
   const [files, setFiles] = useState<FileItem[]>(initialFiles);
+ // Supabase Storage에서 파일 목록 불러오기
+ useEffect(() => {
+   const fetchFiles = async () => {
+     const res = await fetch('/api/files')
+     const data = await res.json()
+     if (data.files) {
+       const loaded: FileItem[] = data.files.map((f: any) => ({
+         id: f.name,
+         name: f.name.replace(/^\d+_/, ''), // 타임스탬프 제거해서 원래 파일명 표시
+         type: getFileType(f.name),
+         size: f.metadata?.size,
+         modifiedAt: new Date(f.created_at),
+         parentId: null,
+       }))
+       setFiles(loaded)
+     }
+   }
+   fetchFiles()
+ }, [])
   const [trashedFiles, setTrashedFiles] = useState<FileItem[]>([]);
   const [currentMenu, setCurrentMenu] = useState<MenuType>("all");
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -305,7 +310,10 @@ export function FileManager() {
     setTrashedFiles((prev) => prev.filter((f) => !fileIds.includes(f.id)));
     setSelectedIds(new Set());
   };
-
+const handleLogout = async () => {
+  await supabase.auth.signOut()
+  window.location.href = '/login'
+}
   // ✅ Supabase Storage에 실제 파일 업로드
   const handleUpload = () => {
     const input = document.createElement("input");
@@ -392,6 +400,11 @@ export function FileManager() {
             </li>
           </ul>
         </nav>
+      <div className="p-4 border-t border-border">
+     <Button variant="outline" className="w-full" onClick={handleLogout}>
+    로그아웃
+  </Button>
+</div>
       </aside>
 
       {/* Main Content */}
