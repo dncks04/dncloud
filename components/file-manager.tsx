@@ -98,17 +98,43 @@ function getFileType(filename: string): FileType {
 }
 
 export function FileManager() {
-  // ✅ 모든 useState를 먼저 선언
-  
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [trashedFiles, setTrashedFiles] = useState<FileItem[]>([]);
+  const [currentMenu, setCurrentMenu] = useState<MenuType>("all");
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [usedBytes, setUsedBytes] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(1024 * 1024 * 1024);
+  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string | null; name: string }[]>([
+    { id: null, name: "내 파일" },
+  ]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
-  // ✅ userId 가져오기
+  // userId 가져오기
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });
   }, []);
 
-  // ✅ userId가 준비되면 파일 목록 불러오기
+  // ✅ fetchStorage를 useCallback으로 분리 → handleUpload에서도 호출 가능
+  const fetchStorage = useCallback(async () => {
+    if (!userId) return;
+    const res = await fetch(`/api/storage?userId=${userId}`);
+    const data = await res.json();
+    if (data.used !== undefined) {
+      setUsedBytes(data.used);
+      setTotalBytes(data.total);
+    }
+  }, [userId]);
+
+  // userId가 준비되면 파일 목록 + 용량 불러오기
   useEffect(() => {
     if (!userId) return;
     const fetchFiles = async () => {
@@ -126,16 +152,9 @@ export function FileManager() {
         setFiles(loaded);
       }
     };
-const fetchStorage = async () => {
-    const res = await fetch(`/api/storage?userId=${userId}`)
-    const data = await res.json()
-    if (data.used !== undefined) {
-      setUsedBytes(data.used)
-      setTotalBytes(data.total)
-    }
-  }
     fetchFiles();
-  }, [userId]);
+    fetchStorage();
+  }, [userId, fetchStorage]);
 
   const getDisplayFiles = useCallback(() => {
     let displayFiles: FileItem[] = [];
@@ -347,6 +366,7 @@ const fetchStorage = async () => {
             parentId: currentFolderId,
           };
           setFiles((prev) => [...prev, newFile]);
+          fetchStorage(); // ✅ 업로드 후 용량 실시간 반영
         } else {
           alert("업로드 실패: " + data.error);
         }
@@ -432,20 +452,23 @@ const fetchStorage = async () => {
                   새 폴더
                 </Button>
               </div>
+              {/* ✅ 실제 용량 게이지바 */}
               <div className="flex items-center gap-3 px-3 py-1.5 bg-muted rounded-md">
-  <HardDrive className="h-4 w-4 text-muted-foreground" />
-  <div className="flex items-center gap-2">
-    <div className="w-24 bg-secondary rounded-full h-1.5">
-      <div
-        className="bg-foreground h-1.5 rounded-full transition-all"
-        style={{ width: `${Math.min((usedBytes / totalBytes) * 100, 100).toFixed(1)}%` }}
-      />
-    </div>
-    <span className="text-xs text-muted-foreground whitespace-nowrap">
-      {(usedBytes / (1024 * 1024)).toFixed(1)} MB / {(totalBytes / (1024 * 1024 * 1024)).toFixed(0)} GB
-    </span>
-  </div>
-</div>
+                <HardDrive className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-2">
+                  <div className="w-24 bg-secondary rounded-full h-1.5">
+                    <div
+                      className="bg-foreground h-1.5 rounded-full transition-all"
+                      style={{ width: `${Math.min((usedBytes / totalBytes) * 100, 100).toFixed(1)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {(usedBytes / (1024 * 1024)).toFixed(1)} MB / {(totalBytes / (1024 * 1024 * 1024)).toFixed(0)} GB
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
