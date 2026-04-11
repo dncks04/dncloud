@@ -1,4 +1,5 @@
 "use client";
+
 import { supabase } from "@/lib/supabase";
 import { useState, useCallback, useEffect } from "react";
 import {
@@ -49,8 +50,6 @@ interface FileItem {
   parentId: string | null;
 }
 
-const initialFiles: FileItem[] = [];
-
 type MenuType = "all" | "trash";
 
 function formatFileSize(bytes?: number): string {
@@ -99,27 +98,8 @@ function getFileType(filename: string): FileType {
 }
 
 export function FileManager() {
-  const [files, setFiles] = useState<FileItem[]>(initialFiles);
- // Supabase Storage에서 파일 목록 불러오기
- useEffect(() => {
-  if (!userId) return
-  const fetchFiles = async () => {
-    const res = await fetch(`/api/files?userId=${userId}`)
-    const data = await res.json()
-    if (data.files) {
-      const loaded: FileItem[] = data.files.map((f: any) => ({
-        id: `${userId}/${f.name}`,
-        name: f.name.replace(/^\d+_/, ''),
-        type: getFileType(f.name),
-        size: f.metadata?.size,
-        modifiedAt: new Date(f.created_at),
-        parentId: null,
-      }))
-      setFiles(loaded)
-    }
-  }
-  fetchFiles()
-}, [userId])
+  // ✅ 모든 useState를 먼저 선언
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [trashedFiles, setTrashedFiles] = useState<FileItem[]>([]);
   const [currentMenu, setCurrentMenu] = useState<MenuType>("all");
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -129,16 +109,39 @@ export function FileManager() {
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-const [userId, setUserId] = useState<string | null>(null)
-useEffect(() => {
-  supabase.auth.getUser().then(({ data }) => {
-    setUserId(data.user?.id ?? null)
-  })
-}, [])
+  const [userId, setUserId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<{ id: string | null; name: string }[]>([
     { id: null, name: "내 파일" },
   ]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+
+  // ✅ userId 가져오기
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
+
+  // ✅ userId가 준비되면 파일 목록 불러오기
+  useEffect(() => {
+    if (!userId) return;
+    const fetchFiles = async () => {
+      const res = await fetch(`/api/files?userId=${userId}`);
+      const data = await res.json();
+      if (data.files) {
+        const loaded: FileItem[] = data.files.map((f: any) => ({
+          id: `${userId}/${f.name}`,
+          name: f.name.replace(/^\d+_/, ""),
+          type: getFileType(f.name),
+          size: f.metadata?.size,
+          modifiedAt: new Date(f.created_at),
+          parentId: null,
+        }));
+        setFiles(loaded);
+      }
+    };
+    fetchFiles();
+  }, [userId]);
 
   const getDisplayFiles = useCallback(() => {
     let displayFiles: FileItem[] = [];
@@ -172,7 +175,6 @@ useEffect(() => {
     }
   };
 
-  // ✅ Supabase Storage에서 파일 다운로드
   const handleDoubleClick = async (file: FileItem) => {
     if (file.type === "folder") {
       setCurrentFolderId(file.id);
@@ -303,7 +305,6 @@ useEffect(() => {
   };
 
   const handlePermanentDelete = async (fileIds: string[]) => {
-    // ✅ Supabase Storage에서 실제 파일 삭제
     for (const id of fileIds) {
       const file = trashedFiles.find((f) => f.id === id);
       if (file && file.type !== "folder") {
@@ -317,11 +318,12 @@ useEffect(() => {
     setTrashedFiles((prev) => prev.filter((f) => !fileIds.includes(f.id)));
     setSelectedIds(new Set());
   };
-const handleLogout = async () => {
-  await supabase.auth.signOut()
-  window.location.href = '/login'
-}
-  // ✅ Supabase Storage에 실제 파일 업로드
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  };
+
   const handleUpload = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -333,7 +335,8 @@ const handleLogout = async () => {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append('userId', userId ?? '')
+        formData.append("userId", userId ?? "");
+
         const res = await fetch("/api/upload", {
           method: "POST",
           body: formData,
@@ -407,11 +410,11 @@ const handleLogout = async () => {
             </li>
           </ul>
         </nav>
-      <div className="p-4 border-t border-border">
-     <Button variant="outline" className="w-full" onClick={handleLogout}>
-    로그아웃
-  </Button>
-</div>
+        <div className="p-4 border-t border-border">
+          <Button variant="outline" className="w-full" onClick={handleLogout}>
+            로그아웃
+          </Button>
+        </div>
       </aside>
 
       {/* Main Content */}
