@@ -12,12 +12,13 @@ function sanitizeFileName(name: string): string {
 export async function POST(request: NextRequest) {
   const formData = await request.formData()
   const file = formData.get('file') as File
+  const userId = formData.get('userId') as string
 
-  if (!file) {
-    return NextResponse.json({ error: '파일이 없어요' }, { status: 400 })
+  if (!file || !userId) {
+    return NextResponse.json({ error: '파일 또는 유저 정보가 없어요' }, { status: 400 })
   }
 
-  const fileName = sanitizeFileName(file.name)
+  const fileName = `${userId}/${sanitizeFileName(file.name)}`
   const { data, error } = await supabase.storage
     .from('files')
     .upload(fileName, file)

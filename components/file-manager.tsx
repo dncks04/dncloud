@@ -102,23 +102,24 @@ export function FileManager() {
   const [files, setFiles] = useState<FileItem[]>(initialFiles);
  // Supabase Storage에서 파일 목록 불러오기
  useEffect(() => {
-   const fetchFiles = async () => {
-     const res = await fetch('/api/files')
-     const data = await res.json()
-     if (data.files) {
-       const loaded: FileItem[] = data.files.map((f: any) => ({
-         id: f.name,
-         name: f.name.replace(/^\d+_/, ''), // 타임스탬프 제거해서 원래 파일명 표시
-         type: getFileType(f.name),
-         size: f.metadata?.size,
-         modifiedAt: new Date(f.created_at),
-         parentId: null,
-       }))
-       setFiles(loaded)
-     }
-   }
-   fetchFiles()
- }, [])
+  if (!userId) return
+  const fetchFiles = async () => {
+    const res = await fetch(`/api/files?userId=${userId}`)
+    const data = await res.json()
+    if (data.files) {
+      const loaded: FileItem[] = data.files.map((f: any) => ({
+        id: `${userId}/${f.name}`,
+        name: f.name.replace(/^\d+_/, ''),
+        type: getFileType(f.name),
+        size: f.metadata?.size,
+        modifiedAt: new Date(f.created_at),
+        parentId: null,
+      }))
+      setFiles(loaded)
+    }
+  }
+  fetchFiles()
+}, [userId])
   const [trashedFiles, setTrashedFiles] = useState<FileItem[]>([]);
   const [currentMenu, setCurrentMenu] = useState<MenuType>("all");
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -128,6 +129,12 @@ export function FileManager() {
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+const [userId, setUserId] = useState<string | null>(null)
+useEffect(() => {
+  supabase.auth.getUser().then(({ data }) => {
+    setUserId(data.user?.id ?? null)
+  })
+}, [])
   const [breadcrumbs, setBreadcrumbs] = useState<{ id: string | null; name: string }[]>([
     { id: null, name: "내 파일" },
   ]);
@@ -326,7 +333,7 @@ const handleLogout = async () => {
       try {
         const formData = new FormData();
         formData.append("file", file);
-
+        formData.append('userId', userId ?? '')
         const res = await fetch("/api/upload", {
           method: "POST",
           body: formData,
