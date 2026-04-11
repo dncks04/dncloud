@@ -99,21 +99,7 @@ function getFileType(filename: string): FileType {
 
 export function FileManager() {
   // ✅ 모든 useState를 먼저 선언
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [trashedFiles, setTrashedFiles] = useState<FileItem[]>([]);
-  const [currentMenu, setCurrentMenu] = useState<MenuType>("all");
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string | null; name: string }[]>([
-    { id: null, name: "내 파일" },
-  ]);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  
 
   // ✅ userId 가져오기
   useEffect(() => {
@@ -140,6 +126,14 @@ export function FileManager() {
         setFiles(loaded);
       }
     };
+const fetchStorage = async () => {
+    const res = await fetch(`/api/storage?userId=${userId}`)
+    const data = await res.json()
+    if (data.used !== undefined) {
+      setUsedBytes(data.used)
+      setTotalBytes(data.total)
+    }
+  }
     fetchFiles();
   }, [userId]);
 
@@ -439,16 +433,19 @@ export function FileManager() {
                 </Button>
               </div>
               <div className="flex items-center gap-3 px-3 py-1.5 bg-muted rounded-md">
-                <HardDrive className="h-4 w-4 text-muted-foreground" />
-                <div className="flex items-center gap-2">
-                  <div className="w-24 bg-secondary rounded-full h-1.5">
-                    <div className="bg-foreground h-1.5 rounded-full" style={{ width: "35%" }} />
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">3.5 / 10 GB</span>
-                </div>
-              </div>
-            </div>
-
+  <HardDrive className="h-4 w-4 text-muted-foreground" />
+  <div className="flex items-center gap-2">
+    <div className="w-24 bg-secondary rounded-full h-1.5">
+      <div
+        className="bg-foreground h-1.5 rounded-full transition-all"
+        style={{ width: `${Math.min((usedBytes / totalBytes) * 100, 100).toFixed(1)}%` }}
+      />
+    </div>
+    <span className="text-xs text-muted-foreground whitespace-nowrap">
+      {(usedBytes / (1024 * 1024)).toFixed(1)} MB / {(totalBytes / (1024 * 1024 * 1024)).toFixed(0)} GB
+    </span>
+  </div>
+</div>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
