@@ -115,6 +115,7 @@ export function FileManager() {
     { id: null, name: "내 파일" },
   ]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [isDragging, setIsDragging] = useState(false);
 
   // userId 가져오기
   useEffect(() => {
@@ -378,7 +379,55 @@ export function FileManager() {
     };
     input.click();
   };
+const handleDragOver = (e: React.DragEvent) => {
+  e.preventDefault();
+  setIsDragging(true);
+};
 
+const handleDragLeave = (e: React.DragEvent) => {
+  e.preventDefault();
+  setIsDragging(false);
+};
+
+const handleDrop = async (e: React.DragEvent) => {
+  e.preventDefault();
+  setIsDragging(false);
+
+  const droppedFiles = Array.from(e.dataTransfer.files);
+  if (droppedFiles.length === 0) return;
+
+  setIsUploading(true);
+  try {
+    for (const file of droppedFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("userId", userId ?? "");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.path) {
+        const newFile: FileItem = {
+          id: data.path,
+          name: file.name,
+          type: getFileType(file.name),
+          size: file.size,
+          modifiedAt: new Date(),
+          parentId: currentFolderId,
+        };
+        setFiles((prev) => [...prev, newFile]);
+      }
+    }
+    fetchStorage();
+  } catch {
+    alert("업로드 중 오류가 발생했어요.");
+  } finally {
+    setIsUploading(false);
+  }
+};
   const displayFiles = getDisplayFiles();
 
   return (
@@ -537,7 +586,15 @@ export function FileManager() {
         </header>
 
         {/* File Grid/List */}
-        <div className="flex-1 overflow-auto p-4">
+        <div
+  className={cn(
+    "flex-1 overflow-auto p-4 transition-colors",
+    isDragging && "bg-muted/50 border-2 border-dashed border-border"
+  )}
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  onDrop={handleDrop}
+>
           {displayFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <Folder className="h-16 w-16 mb-4 opacity-50" />
