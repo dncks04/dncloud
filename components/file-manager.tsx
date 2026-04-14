@@ -116,7 +116,7 @@ export function FileManager() {
   ]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
-
+  const [uploadProgress, setUploadProgress] = useState(0);
   // userId 가져오기
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -338,47 +338,66 @@ export function FileManager() {
     window.location.href = "/login";
   };
 
-  const handleUpload = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+const uploadFile = (file: File): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("userId", userId ?? "");
 
-      setIsUploading(true);
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("userId", userId ?? "");
+    const xhr = new XMLHttpRequest();
 
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json();
-        if (data.path) {
-          const newFile: FileItem = {
-            id: data.path,
-            name: file.name,
-            type: getFileType(file.name),
-            size: file.size,
-            modifiedAt: new Date(),
-            parentId: currentFolderId,
-          };
-          setFiles((prev) => [...prev, newFile]);
-          fetchStorage(); // ✅ 업로드 후 용량 실시간 반영
-        } else {
-          alert("업로드 실패: " + data.error);
-        }
-      } catch {
-        alert("업로드 중 오류가 발생했어요.");
-      } finally {
-        setIsUploading(false);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        setUploadProgress(percent);
       }
     };
-    input.click();
+
+    xhr.onload = () => {
+      const data = JSON.parse(xhr.responseText);
+      setUploadProgress(0);
+      resolve(data.path ?? null);
+    };
+
+    xhr.onerror = () => {
+      setUploadProgress(0);
+      resolve(null);
+    };
+
+    xhr.open("POST", "/api/upload");
+    xhr.send(formData);
+  });
+};
+
+const handleUpload = () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const path = await uploadFile(file);
+      if (path) {
+        setFiles((prev) => [...prev, {
+          id: path,
+          name: file.name,
+          type: getFileType(file.name),
+          size: file.size,
+          modifiedAt: new Date(),
+          parentId: currentFolderId,
+        }]);
+        fetchStorage();
+      } else {
+        alert("업로드에 실패했어요.");
+      }
+    } finally {
+      setIsUploading(false);
+    }
   };
+  input.click();
+};
 const handleDragOver = (e: React.DragEvent) => {
   e.preventDefault();
   setIsDragging(true);
@@ -399,31 +418,19 @@ const handleDrop = async (e: React.DragEvent) => {
   setIsUploading(true);
   try {
     for (const file of droppedFiles) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("userId", userId ?? "");
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (data.path) {
-        const newFile: FileItem = {
-          id: data.path,
+      const path = await uploadFile(file);
+      if (path) {
+        setFiles((prev) => [...prev, {
+          id: path,
           name: file.name,
           type: getFileType(file.name),
           size: file.size,
           modifiedAt: new Date(),
           parentId: currentFolderId,
-        };
-        setFiles((prev) => [...prev, newFile]);
+        }]);
       }
     }
     fetchStorage();
-  } catch {
-    alert("업로드 중 오류가 발생했어요.");
   } finally {
     setIsUploading(false);
   }
@@ -583,6 +590,20 @@ const handleDrop = async (e: React.DragEvent) => {
               )}
             </div>
           )}
+          {uploadProgress > 0 && (
+  <div className="mt-3">
+    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+      <span>업로드 중...</span>
+      <span>{uploadProgress}%</span>
+    </div>
+    <div className="w-full bg-secondary rounded-full h-1.5">
+      <div
+        className="bg-foreground h-1.5 rounded-full transition-all"
+        style={{ width: `${uploadProgress}%` }}
+      />
+    </div>
+  </div>
+)}
         </header>
 
         {/* File Grid/List */}
